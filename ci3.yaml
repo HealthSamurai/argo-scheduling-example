@@ -1,0 +1,66 @@
+apiVersion: "zeroci.io/v1"
+kind: Build
+status: peinding
+pipeline:
+
+- type: env
+  HOST_IP:
+    command: ip route show default | awk '/default/ {print $3}'
+  APP_URL:
+    command: echo "http://$(hostname -i):6666"
+  REACT_APP_SITE_URL: https://schedulerdemo.edge.aidbox.app
+  REACT_APP_CLIENT_ID: web-app
+  REACT_APP_REDIRECT_URL: https://schedulerdemo-ui.aidbox.app/auth
+  IMAGE_TAG:
+    command: shell git describe --tags 2> /dev/null || git rev-parse --short HEAD
+
+- type: bash
+  command: apk add --no-cache nodejs
+
+- type: bash
+  command: npm install -g npm
+
+- type: bash
+  command: cd scheduler && npm install
+
+- type: bash
+  command: cd dev && docker-compose -f docker-compose-test.yaml up -d
+
+- type: bash
+  command: echo $HOST_IP
+
+- type: bash
+  command: echo $(hostname -i)
+
+- type: bash
+  command: cd scheduler && npm install && ls -lah node_modules
+
+- type: bash
+  command: cd scheduler && npm run test
+
+- type: bash
+  command: cd dev && docker-compose -f docker-compose-test.yaml down
+
+- type: bash
+  command: docker login -u $CI3_SECRET_DOCKER_USER -p "$CI3_SECRET_DOCKER_PASSWORD" $CI3_SECRET_DOCKER_HUB
+
+- type: bash
+  command: cd scheduler && docker build . -t us.gcr.io/aidbox2-205511/scheduler-demo-app:$IMAGE_TAG
+
+- type: bash
+  command: docker push us.gcr.io/aidbox2-205511/scheduler-demo-app:$IMAGE_TAG
+
+- type: bash
+  command: cd ui && npm install && npm run build
+
+- type: bash
+  command: cd ui && docker build . -t us.gcr.io/aidbox2-205511/scheduler-demo-ui:$IMAGE_TAG
+
+- type: bash
+  command: docker push us.gcr.io/aidbox2-205511/scheduler-demo-ui:$IMAGE_TAG
+
+- type: bash
+  command: |
+    cat k8s/scheduler.yaml | sed 's;IMAGE_TAG;'"${IMAGE_TAG}"';g' | sed 's;AIDBOX_VERSION;'"${AIDBOX_VERSION}"';g' > /tmp/scheduler.yaml \
+    && kubectl apply -f /tmp/scheduler.yaml --force \
+    && echo "${IMAGE_TAG} was deployed to the cluster"

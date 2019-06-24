@@ -1,0 +1,622 @@
+resourceType: Bundle
+type: transaction
+entry:
+  - resource:
+      resourceType: PractitionerRole
+      id: therapist
+      specialty:
+        - coding:
+          - display: Therapist
+      availableTime:
+        - daysOfWeek:
+          - mon
+          - tue
+          - wed
+          - thu
+          - fri
+          - sat
+
+          availableStartTime: '10:00:00'
+          availableEndTime: '12:00:00'
+    request:
+      method: PUT
+      url: /PractitionerRole/therapist
+
+  - resource:
+      resourceType: AccessPolicy
+      id: backdoor-policy
+      engine: "json-schema"
+      schema:
+        properties:
+          params:
+            properties:
+              __secret:
+                constant: nobodyknowsme
+
+            required: ["__secret"]
+
+        required: ["params"]
+
+    request:
+      method: PUT
+      url: /AccessPolicy/backdoor-policy
+
+  - resource:
+      resourceType: AccessPolicy
+      id: allow-practitioner-access
+      engine: "sql"
+      link:
+        - id: web-app
+          resourceType: Client
+      sql:
+        query: |
+          WITH parts AS (
+          SELECT jsonb_array_elements(ct.resource->'participant')->'member' as m FROM careteam ct
+          WHERE ct.resource @> ('{"participant": [{"member": {"id": "' || {{user.data.custom:practitioner_id}} || '", "resourceType": "Practitioner" } }]}')::jsonb
+          )
+          SELECT true FROM parts
+          WHERE parts.m->>'id' = {{params.resource/id}} AND parts.m->>'resourceType' = 'Patient' AND
+          {{params.resource/type}} = 'Patient'
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-practitioner-access
+
+  - resource:
+      resourceType: AccessPolicy
+      id: allow-patient-compartment
+      engine: "json-schema"
+      link:
+        - id: web-app
+          resourceType: Client
+      schema:
+        properties:
+          user:
+            properties:
+              data:
+                required: ["patient_id"]
+
+            required: ["data"]
+
+          params:
+            required: ["resource/id", "resource/type"]
+            properties:
+              resource/id: {"constant": {"$data": "#/user/data/patient_id"}}
+              resource/type:
+                constant: Patient
+
+        required: ["user", "params"]
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-patient-compartment
+
+  - resource:
+      resourceType: AccessPolicy
+      id: allow-admin-access
+      engine: "json-schema"
+      schema:
+        properties:
+          user:
+            properties:
+              data:
+                required: ["custom:admin"]
+                properties:
+                  'custom:admin':
+                    constant: "true"
+            required: ["data"]
+
+        required: ["user"]
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-admin-access
+
+
+  - resource:
+      resourceType: AccessPolicy
+      id: allow-patient-self-user
+      engine: "json-schema"
+      link:
+        - id: web-app
+          resourceType: Client
+      schema:
+        properties:
+          user:
+            properties:
+              data:
+                required: ["patient"]
+
+            required: ["data"]
+
+          params:
+            required: ["resource/id", "resource/type"]
+            properties:
+              resource/id: {"constant": {"$data": "#/user/id"}}
+              resource/type:
+                constant: User
+
+        required: ["user", "params"]
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-patient-self-user
+
+  - resource:
+      resourceType: AccessPolicy
+      id: allow-to-hold-appointment
+      engine: json-schema
+      link:
+        - id: web-app
+          resourceType: Client
+      schema:
+        properties:
+          request-method:
+            constant: 'get'
+
+          user:
+            required: ["data"]
+            properties:
+              data:
+                required: ['patient_id']
+
+          uri:
+            constant: '/fhir/Appointment/$find'
+
+        required: ["user", "uri", "request-method"]
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-to-find-appointments
+
+  - resource:
+      resourceType: AccessPolicy
+      id: allow-to-hold-appointment
+      engine: json-schema
+      link:
+        - id: web-app
+          resourceType: Client
+      schema:
+        properties:
+          request-method:
+            constant: 'post'
+
+          user:
+            required: ["data"]
+            properties:
+              data:
+                required: ['patient_id']
+
+          uri:
+            constant: '/fhir/Appointment/$hold'
+
+        required: ["user", "uri", "request-method"]
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-to-hold-appointment
+
+  - resource:
+      resourceType: AccessPolicy
+      id: allow-to-get-practitioner-roles
+      engine: json-schema
+      link:
+        - id: web-app
+          resourceType: Client
+      schema:
+        properties:
+          request-method:
+            constant: 'get'
+
+          uri:
+            oneOf:
+            - constant: '/PractitionerRole'
+            - constant: '/fhir/PractitionerRole'
+
+        required: ["user", "uri", "request-method"]
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-to-get-practitioner-roles
+
+  - resource:
+      secret: appsecret
+      first_party: true
+      grant_types: [client_credentials, basic]
+      resourceType: Client
+      id: appclient
+
+    request:
+      method: PUT
+      url: /Client/appclient
+
+  - resource:
+      secret: webappsecret
+      first_party: true
+      grant_types: [client_credentials, authorization_code]
+      resourceType: Client
+      id: web-app
+      auth:
+        authorization_code:
+          redirect_uri: https://schedulerdemo-ui.aidbox.app/auth
+          token_format: jwt
+          access_token_expiration: 43200
+
+    request:
+      method: PUT
+      url: /Client/web-app
+
+  - resource:
+      link:
+        - {id: appclient, resourceType: Client}
+      engine: allow
+      resourceType: AccessPolicy
+      id: allow-app-client
+
+    request:
+      method: PUT
+      url: /AccessPolicy/allow-app-client
+
+  - resource:
+      resourceType: IdentityProvider
+      id: cognito
+      type: "OIDC"
+
+      system: "https://scheduler-demo.auth.us-east-1.amazoncognito.com"
+      userinfo_endpoint: "https://scheduler-demo.auth.us-east-1.amazoncognito.com/oauth2/userInfo"
+      token_endpoint: "https://scheduler-demo.auth.us-east-1.amazoncognito.com/oauth2/token"
+      authorize_endpoint: "https://scheduler-demo.auth.us-east-1.amazoncognito.com/oauth2/authorize"
+
+      toScim:
+        email: ["email"]
+        name: ["name", "formatted"]
+        given_name: ["name", "givenName"]
+        family_name: ["name", "familyName"]
+        gender: ["gender"]
+        preferred_username: ["userName"]
+
+      client:
+        id: "2h0lov6p8nljoosik2ibqc53i6"
+        secret: "1akkld0k36sikm50onkhorub9ub93fkuc86q5u2679ise55po93m"
+
+    request:
+      method: PUT
+      url: /IdentityProvider/cognito
+
+  - request:
+      method: PUT
+      url: /CompartmentDefinition/Patient
+
+    resource:
+      resourceType: CompartmentDefinition
+      id: patient
+      url: http://hl7.org/fhir/CompartmentDefinition/patient
+      version: 4.0.0
+      name: Base FHIR compartment definition for Patient
+      status: draft
+      experimental: true
+      date: '2018-12-27T22:37:54+11:00'
+      publisher: FHIR Project Team
+      contact:
+      - telecom:
+        - system: url
+          value: http://hl7.org/fhir
+      description: There is an instance of the patient compartment for each patient resource,
+        and the identity of the compartment is the same as the patient. When a patient is
+        linked to another patient, all the records associated with the linked patient are
+        in the compartment associated with the target of the link.. The set of resources
+        associated with a particular patient
+      code: Patient
+      search: true
+      resource:
+      - code: Account
+        param:
+        - subject
+      - code: ActivityDefinition
+      - code: AdverseEvent
+        param:
+        - subject
+      - code: AllergyIntolerance
+        param:
+        - patient
+        - recorder
+        - asserter
+      - code: Appointment
+        param:
+        - actor
+      - code: AppointmentResponse
+        param:
+        - actor
+      - code: AuditEvent
+        param:
+        - patient
+      - code: Basic
+        param:
+        - patient
+        - author
+      - code: Binary
+      - code: BiologicallyDerivedProduct
+      - code: BodyStructure
+        param:
+        - patient
+      - code: Bundle
+      - code: CapabilityStatement
+      - code: CarePlan
+        param:
+        - patient
+        - performer
+      - code: CareTeam
+        param:
+        - patient
+        - participant
+      - code: CatalogEntry
+      - code: ChargeItem
+        param:
+        - subject
+      - code: ChargeItemDefinition
+      - code: Claim
+        param:
+        - patient
+        - payee
+      - code: ClaimResponse
+        param:
+        - patient
+      - code: ClinicalImpression
+        param:
+        - subject
+      - code: CodeSystem
+      - code: Communication
+        param:
+        - subject
+        - sender
+        - recipient
+      - code: CommunicationRequest
+        param:
+        - subject
+        - sender
+        - recipient
+        - requester
+      - code: CompartmentDefinition
+      - code: Composition
+        param:
+        - subject
+        - author
+        - attester
+      - code: ConceptMap
+      - code: Condition
+        param:
+        - patient
+        - asserter
+      - code: Consent
+        param:
+        - patient
+      - code: Contract
+      - code: Coverage
+        param:
+        - policy-holder
+        - subscriber
+        - beneficiary
+        - payor
+      - code: CoverageEligibilityRequest
+        param:
+        - patient
+      - code: CoverageEligibilityResponse
+        param:
+        - patient
+      - code: DetectedIssue
+        param:
+        - patient
+      - code: Device
+      - code: DeviceDefinition
+      - code: DeviceMetric
+      - code: DeviceRequest
+        param:
+        - subject
+        - performer
+      - code: DeviceUseStatement
+        param:
+        - subject
+      - code: DiagnosticReport
+        param:
+        - subject
+      - code: DocumentManifest
+        param:
+        - subject
+        - author
+        - recipient
+      - code: DocumentReference
+        param:
+        - subject
+        - author
+      - code: EffectEvidenceSynthesis
+      - code: Encounter
+        param:
+        - patient
+      - code: Endpoint
+      - code: EnrollmentRequest
+        param:
+        - subject
+      - code: EnrollmentResponse
+      - code: EpisodeOfCare
+        param:
+        - patient
+      - code: EventDefinition
+      - code: Evidence
+      - code: EvidenceVariable
+      - code: ExampleScenario
+      - code: ExplanationOfBenefit
+        param:
+        - patient
+        - payee
+      - code: FamilyMemberHistory
+        param:
+        - patient
+      - code: Flag
+        param:
+        - patient
+      - code: Goal
+        param:
+        - patient
+      - code: GraphDefinition
+      - code: Group
+        param:
+        - member
+      - code: GuidanceResponse
+      - code: HealthcareService
+      - code: ImagingStudy
+        param:
+        - patient
+      - code: Immunization
+        param:
+        - patient
+      - code: ImmunizationEvaluation
+        param:
+        - patient
+      - code: ImmunizationRecommendation
+        param:
+        - patient
+      - code: ImplementationGuide
+      - code: InsurancePlan
+      - code: Invoice
+        param:
+        - subject
+        - patient
+        - recipient
+      - code: Library
+      - code: Linkage
+      - code: List
+        param:
+        - subject
+        - source
+      - code: Location
+      - code: Measure
+      - code: MeasureReport
+        param:
+        - patient
+      - code: Media
+        param:
+        - subject
+      - code: Medication
+      - code: MedicationAdministration
+        param:
+        - patient
+        - performer
+        - subject
+      - code: MedicationDispense
+        param:
+        - subject
+        - patient
+        - receiver
+      - code: MedicationKnowledge
+      - code: MedicationRequest
+        param:
+        - subject
+      - code: MedicationStatement
+        param:
+        - subject
+      - code: MedicinalProduct
+      - code: MedicinalProductAuthorization
+      - code: MedicinalProductContraindication
+      - code: MedicinalProductIndication
+      - code: MedicinalProductIngredient
+      - code: MedicinalProductInteraction
+      - code: MedicinalProductManufactured
+      - code: MedicinalProductPackaged
+      - code: MedicinalProductPharmaceutical
+      - code: MedicinalProductUndesirableEffect
+      - code: MessageDefinition
+      - code: MessageHeader
+      - code: MolecularSequence
+        param:
+        - patient
+      - code: NamingSystem
+      - code: NutritionOrder
+        param:
+        - patient
+      - code: Observation
+        param:
+        - subject
+        - performer
+      - code: ObservationDefinition
+      - code: OperationDefinition
+      - code: OperationOutcome
+      - code: Organization
+      - code: OrganizationAffiliation
+      - code: Patient
+        param:
+        - link
+      - code: PaymentNotice
+      - code: PaymentReconciliation
+      - code: Person
+        param:
+        - patient
+      - code: PlanDefinition
+      - code: Practitioner
+      - code: PractitionerRole
+      - code: Procedure
+        param:
+        - patient
+        - performer
+      - code: Provenance
+        param:
+        - patient
+      - code: Questionnaire
+      - code: QuestionnaireResponse
+        param:
+        - subject
+        - author
+      - code: RelatedPerson
+        param:
+        - patient
+      - code: RequestGroup
+        param:
+        - subject
+        - participant
+      - code: ResearchDefinition
+      - code: ResearchElementDefinition
+      - code: ResearchStudy
+      - code: ResearchSubject
+        param:
+        - individual
+      - code: RiskAssessment
+        param:
+        - subject
+      - code: RiskEvidenceSynthesis
+      - code: Schedule
+        param:
+        - actor
+      - code: SearchParameter
+      - code: ServiceRequest
+        param:
+        - subject
+        - performer
+      - code: Slot
+      - code: Specimen
+        param:
+        - subject
+      - code: SpecimenDefinition
+      - code: StructureDefinition
+      - code: StructureMap
+      - code: Subscription
+      - code: Substance
+      - code: SubstanceNucleicAcid
+      - code: SubstancePolymer
+      - code: SubstanceProtein
+      - code: SubstanceReferenceInformation
+      - code: SubstanceSourceMaterial
+      - code: SubstanceSpecification
+      - code: SupplyDelivery
+        param:
+        - patient
+      - code: SupplyRequest
+        param:
+        - subject
+      - code: Task
+      - code: TerminologyCapabilities
+      - code: TestReport
+      - code: TestScript
+      - code: ValueSet
+      - code: VerificationResult
+      - code: VisionPrescription
+        param:
+        - patient

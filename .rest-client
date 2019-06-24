@@ -1,0 +1,75 @@
+################################
+GET https://schedulerdemo.edge.aidbox.app/Medication?__debug=policy
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3NjaGVkdWxlcmRlbW8uZWRnZS5haWRib3guYXBwIiwic3ViIjoiNjI5YTAwNmYtNzFjZC00NDQzLWFjYTMtNjVkYzRmZTNjMDM5IiwiaWF0IjoxNTYwODU0Nzc0LCJqdGkiOiI1YmZjMTdlZS1lOWI5LTRhMGMtYjdmYy04NTNkMGYzMmYxYmQiLCJhdWQiOiJodHRwczovL3NjaGVkdWxlcmRlbW8uZWRnZS5haWRib3guYXBwIiwiZXhwIjoxNTYwODk3OTc0fQ.gHIfJLJ4cSkvCeXH2hybNFRC8OLAx5TsghY0Jr15s2j93rMxn83c0JD1WCOYRsCibAg8IkyzaIZhc-7Jkz8rGwQTYRgysFq9qT96swlVi9xI_PEeKS7UigtVl5qbYP7AW9cyIzUrOBa5TJyywPf3vw29MwINicXcH7U4OEAD4FI
+################################
+PUT https://schedulerdemo.edge.aidbox.app/fhir/Practitioner/example?__secret=nobodyknowsme
+Content-Type: text/yaml
+
+resourceType: Practitioner
+id: example
+active: true
+name:
+- family: Careful
+  given:
+  - Adam
+  prefix:
+  - Dr
+address:
+- use: home
+  line:
+  - 534 Erewhon St
+  city: PleasantVille
+  state: Vic
+  postalCode: '3999'
+
+################################
+POST https://schedulerdemo.edge.aidbox.app/fhir/CareTeam?__secret=nobodyknowsme
+Content-Type: text/yaml
+
+resourceType: CareTeam
+status: active
+category:
+- coding:
+  - system: http://loinc.org
+    code: LA27976-2
+    display: Encounter-focused care team
+name: Example Care Team
+subject:
+  reference: Patient/cdcfe004-1952-42ef-b756-1ec3705d0d91
+  display: Peter James Chalmers
+period:
+  end: '2020-01-01'
+participant:
+- role:
+  - text: responsiblePerson
+  member:
+    reference: Patient/cdcfe004-1952-42ef-b756-1ec3705d0d91
+    display: Peter James Chalmers
+
+- role:
+  - text: physician
+  member:
+    reference: Practitioner/example
+    display: Dorothy Dietition
+
+########################################
+GET https://schedulerdemo.edge.aidbox.app/Patient/cdcfe004-1952-42ef-b756-1ec3705d0d91/Appointment?__debug=policy
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3NjaGVkdWxlcmRlbW8uZWRnZS5haWRib3guYXBwIiwic3ViIjoiZGNhNWVkNWQtMzQ5Yy00MTUyLTljZTctNzU5MTE1ZWQ1NDc3IiwiaWF0IjoxNTYwODYwNTUzLCJqdGkiOiI2MTkyMjliOC0zYWY2LTRiMWYtYjVjMi1iOTBlOTU4ZWI0MTciLCJhdWQiOiJodHRwczovL3NjaGVkdWxlcmRlbW8uZWRnZS5haWRib3guYXBwIiwiZXhwIjoxNTYwOTAzNzUzfQ.U33x9zV0KM6MEPrjdg_n5tRb12whO8U41PNjthm_eYCWivlN_eU7-9PhHGqc6Cia0RcLDSGwaFOWj_LzYambM-e-agpTd23ptQSJ4p7K6rLmwjaKSiD6_TbyylsjFlIE-7EVqS62guwDOYqdSk1n5K2ZLbnAPnR_JlJgbhOEptE
+########################################
+
+{
+  Patient(id: "cdcfe004-1952-42ef-b756-1ec3705d0d91") {
+    id
+    
+    name {
+      given
+      family
+    }
+    
+    Appointments {
+      id
+      start
+      end
+    }
+  }
+}

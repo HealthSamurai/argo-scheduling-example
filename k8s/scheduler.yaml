@@ -1,0 +1,102 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: scheduler-demo-app
+  namespace: cluster-production
+  labels:
+    app: scheduler-demo-app
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: scheduler-demo-app
+    spec:
+      containers:
+      - name: cluster
+        image: "us.gcr.io/aidbox2-205511/scheduler-demo-app:IMAGE_TAG"
+        imagePullPolicy: Always
+        env:
+        - name: APP_INIT_URL
+          value: https://schedulerdemo.edge.aidbox.app
+
+        - name: APP_CLIENT_ID
+          value: appclient
+
+        - name: APP_CLIENT_SECRET
+          value: appsecret
+
+        - name: APP_URL
+          value: http://scheduler-demo-app.cluster-production.svc.cluster.local
+
+        - name: APP_PORT
+          value: "8888"
+
+        - name: APP_SECRET
+          value: appsecret
+
+        ports:
+        - containerPort: 8888
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler-demo-app
+  namespace: cluster-production
+  labels:
+    app: scheduler-demo-app
+spec:
+  selector:
+    app: scheduler-demo-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8888
+  type: ClusterIP
+
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: scheduler-demo-ui
+  namespace: cluster-production
+  labels:
+    app: scheduler-demo-ui
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: scheduler-demo-ui
+    spec:
+      containers:
+      - name: cluster
+        image: "us.gcr.io/aidbox2-205511/scheduler-demo-ui:IMAGE_TAG"
+        imagePullPolicy: Always
+        # env:
+        # - name: APP_INIT_URL
+        #   value: https://schedulerdemo.aidbox.app
+
+        ports:
+        - containerPort: 80
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler-demo-ui
+  namespace: cluster-production
+  labels:
+    app: scheduler-demo-ui
+spec:
+  selector:
+    app: scheduler-demo-ui
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP

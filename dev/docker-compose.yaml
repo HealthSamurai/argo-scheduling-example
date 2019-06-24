@@ -1,0 +1,40 @@
+version: '3.3'
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:6432"
+    volumes:
+      - ./pgdata:/data
+    environment:
+      PGDATA: /data
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    image: "aidbox/db:11.1.0-3-g7a1dab6"
+
+  aidbox:
+    ports:
+      - "9999:8080"
+    links:
+      - db:postgresql
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      PGHOST: postgresql
+      POSTGRES_USER: aidbox
+      AIDBOX_FHIR_VERSION: 4.0.0
+      AIDBOX_ADMIN_ID: admin
+      AIDBOX_ADMIN_PASSWORD: password
+      AIDBOX_PORT: 8080
+      AIDBOX_LICENSE_ID: c4ed8c04ea344b4
+      AIDBOX_LICENSE_KEY: 9bb9e34d91b240e2a438d7dc4fed1518
+      AIDBOX_CLIENT_ID: appclient
+      AIDBOX_CLIENT_SECRET: appsecret
+      AIDBOX_BASE_URL: http://localhost:9999
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: aidbox_app
+    depends_on:
+      - db
+    image: "healthsamurai/devbox:0.4.4-SNAPSHOT"
